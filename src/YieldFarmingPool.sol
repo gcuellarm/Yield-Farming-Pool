@@ -6,17 +6,16 @@ import "../lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol"
 import "../lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
-
 /**
-* @title YieldFarmingPool
-* @dev Yield Farming contract demonstrating the use of abi.encodePacked
-* to encode the pool parameters and calculate unique identifiers
-*/
+ * @title YieldFarmingPool
+ * @dev Yield Farming contract demonstrating the use of abi.encodePacked
+ * to encode the pool parameters and calculate unique identifiers
+ */
 contract YieldFarmingPool is ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     // structure to store pool info
-    struct Pool{
+    struct Pool {
         address token;
         uint256 totalStaked;
         uint256 rewardRate;
@@ -25,7 +24,7 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         bool isActive;
     }
 
-    struct UserInfo{
+    struct UserInfo {
         uint256 amount;
         uint256 rewardDebt;
         uint256 lastClaimTime;
@@ -43,39 +42,34 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
     // List of all active pools
     bytes32[] public activePools;
     // Events
+
     event PoolCreated(bytes32 indexed poolId, address indexed token, uint256 rewardRate);
     event Staked(bytes32 indexed poolId, address indexed user, uint256 amount);
     event Withdrawn(bytes32 indexed poolId, address indexed user, uint256 amount);
     event RewardClaimed(bytes32 indexed poolId, address indexed user, uint256 amount);
     event PoolUpdated(bytes32 indexed poolId, uint256 rewardRate);
 
-
     /**
-    * @dev Constructor to initialize the contract
-    * @param _rewardToken The address of the reward token
-    */
-    constructor(address _rewardToken) Ownable(msg.sender){
+     * @dev Constructor to initialize the contract
+     * @param _rewardToken The address of the reward token
+     */
+    constructor(address _rewardToken) Ownable(msg.sender) {
         require(_rewardToken != address(0), "Invalid Reward Token");
         rewardToken = IERC20(_rewardToken);
     }
 
     /**
-    * @dev creates a new yield farming pool
-    * @param token The address of the token to stake
-    * @param rewardRate Reward rate per second
-    * @return poolId The unique identifier of the pool
-    */
-    function createPool(address token, uint256 rewardRate) external onlyOwner returns(bytes32 poolId){
+     * @dev creates a new yield farming pool
+     * @param token The address of the token to stake
+     * @param rewardRate Reward rate per second
+     * @return poolId The unique identifier of the pool
+     */
+    function createPool(address token, uint256 rewardRate) external onlyOwner returns (bytes32 poolId) {
         require(token != address(0), "Invalid Token");
         require(rewardRate > 0, "Reward Rate must be positive");
 
-        //Task: use ABI Encoder Demo to calculate de poolIds as an external tool   
-        poolId = keccak256(abi.encodePacked(
-            token,
-            rewardRate,
-            block.timestamp,
-            block.chainid
-        ));
+        //Task: use ABI Encoder Demo to calculate de poolIds as an external tool
+        poolId = keccak256(abi.encodePacked(token, rewardRate, block.timestamp, block.chainid));
 
         require(pools[poolId].token == address(0), "Pool already exists");
 
@@ -93,13 +87,12 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         emit PoolCreated(poolId, token, rewardRate);
     }
 
-
     /**
      * @dev Stake tokens in specific pools
      * @param poolId Pool identifier
      * @param amount Amount of tokens to stake
      */
-    function stake(bytes32 poolId, uint256 amount) external nonReentrant{
+    function stake(bytes32 poolId, uint256 amount) external nonReentrant {
         Pool storage pool = pools[poolId];
         require(pool.isActive, "Pool is not active");
         require(amount > 0, "Amount must be positive");
@@ -108,9 +101,9 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
 
         UserInfo storage user = userInfo[poolId][msg.sender];
 
-        if(user.amount > 0) {
+        if (user.amount > 0) {
             uint256 pending = _calculatePendingRewards(poolId, msg.sender);
-            if(pending > 0) {
+            if (pending > 0) {
                 _safeRewardTransfer(msg.sender, pending);
                 emit RewardClaimed(poolId, msg.sender, pending);
             }
@@ -125,16 +118,14 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         pool.totalStaked += amount;
 
         emit Staked(poolId, msg.sender, amount);
-        
     }
 
-
     /**
-    * @dev Withdraw staked tokens from a pool
-    * @param poolId Pool identifier
-    * @param amount Amount of tokens to withdraw
-    */
-    function withdraw(bytes32 poolId, uint256 amount) external nonReentrant(){
+     * @dev Withdraw staked tokens from a pool
+     * @param poolId Pool identifier
+     * @param amount Amount of tokens to withdraw
+     */
+    function withdraw(bytes32 poolId, uint256 amount) external nonReentrant {
         Pool storage pool = pools[poolId];
         UserInfo storage user = userInfo[poolId][msg.sender]; //if "user" is used instead of msg.sender, that would be a vulnerability (you can check whichever user's info)
         require(pool.isActive, "Pool is not active");
@@ -144,7 +135,7 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         _updatePool(poolId);
 
         uint256 pending = _calculatePendingRewards(poolId, msg.sender);
-        if(pending > 0) {
+        if (pending > 0) {
             _safeRewardTransfer(msg.sender, pending);
             emit RewardClaimed(poolId, msg.sender, pending);
         }
@@ -158,15 +149,14 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         IERC20(pool.token).safeTransfer(msg.sender, amount);
         emit Withdrawn(poolId, msg.sender, amount);
     }
-    
 
     /**
-    * @dev Claim pending rewards
-    * @param poolId Pool identifier
-    */
-    function claimRewards(bytes32 poolId) external nonReentrant(){
+     * @dev Claim pending rewards
+     * @param poolId Pool identifier
+     */
+    function claimRewards(bytes32 poolId) external nonReentrant {
         _updatePool(poolId);
-        
+
         uint256 pending = _calculatePendingRewards(poolId, msg.sender);
         require(pending > 0, "No rewards to claim");
 
@@ -179,13 +169,12 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         emit RewardClaimed(poolId, msg.sender, pending);
     }
 
-
     /**
-    * @dev Update the reward rate of a pool
-    * @param poolId Pool identifier
-    * @param newRewardRate New reward rate per second
-    */
-    function updatePoolRewardRate(bytes32 poolId, uint256 newRewardRate) external onlyOwner(){
+     * @dev Update the reward rate of a pool
+     * @param poolId Pool identifier
+     * @param newRewardRate New reward rate per second
+     */
+    function updatePoolRewardRate(bytes32 poolId, uint256 newRewardRate) external onlyOwner {
         Pool storage pool = pools[poolId];
         require(pool.isActive, "Pool is not active");
 
@@ -195,7 +184,7 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
         emit PoolUpdated(poolId, newRewardRate);
     }
 
-        /**
+    /**
      * @dev Calculate the pending rewards of a user
      * @param poolId Pool identifier
      * @param user User address
@@ -204,85 +193,75 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
     function pendingRewards(bytes32 poolId, address user) external view returns (uint256) {
         Pool storage pool = pools[poolId];
         UserInfo storage userInfoData = userInfo[poolId][user];
-        
+
         uint256 rewardPerTokenStored = pool.rewardPerTokenStored;
-        
+
         if (pool.totalStaked > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastUpdateTime;
             uint256 rewards = timeElapsed * pool.rewardRate;
             rewardPerTokenStored += rewards * 1e18 / pool.totalStaked;
         }
-        
+
         return userInfoData.amount * rewardPerTokenStored / 1e18 - userInfoData.rewardDebt;
     }
 
-
     /**
-    * @dev Get the encoded pool info for external use
-    * @param poolId Pool identifier
-    * @return encodedData Encoded data of the pool
-    */
-    function getPoolEncodedData(bytes32 poolId) external view returns(bytes memory encodedData){
+     * @dev Get the encoded pool info for external use
+     * @param poolId Pool identifier
+     * @return encodedData Encoded data of the pool
+     */
+    function getPoolEncodedData(bytes32 poolId) external view returns (bytes memory encodedData) {
         Pool storage pool = pools[poolId];
         encodedData = abi.encodePacked(
-            pool.token,
-            pool.totalStaked,
-            pool.rewardRate,
-            pool.lastUpdateTime,
-            pool.rewardPerTokenStored,
-            pool.isActive
+            pool.token, pool.totalStaked, pool.rewardRate, pool.lastUpdateTime, pool.rewardPerTokenStored, pool.isActive
         );
     }
 
-
     /**
-    * @dev Get the user hash for external use
-    * @param poolId Pool identifier
-    * @param user User address
-    * @return userHash Unique user hash
-    */
-    function getUserHash(bytes32 poolId, address user) external pure returns(bytes32 userHash){
+     * @dev Get the user hash for external use
+     * @param poolId Pool identifier
+     * @param user User address
+     * @return userHash Unique user hash
+     */
+    function getUserHash(bytes32 poolId, address user) external pure returns (bytes32 userHash) {
         userHash = keccak256(abi.encodePacked(poolId, user, "YIELD_FARMING_USER"));
     }
 
-
     /**
-    * @dev Get the total number of active pools
-    * @return count Number of active pools
-    */
-    function getActivePoolsCount() external view returns(uint256){
+     * @dev Get the total number of active pools
+     * @return count Number of active pools
+     */
+    function getActivePoolsCount() external view returns (uint256) {
         return activePools.length;
     }
 
-
     /**
-    * @dev Get the list of active pools
-    * @return pools Array with the identifiers of active pools
-    */
-    function getActivePools() external view returns(bytes32[] memory){
+     * @dev Get the list of active pools
+     * @return pools Array with the identifiers of active pools
+     */
+    function getActivePools() external view returns (bytes32[] memory) {
         return activePools;
     }
 
     /**
-    * @dev Emergency withdraw tokens from the contract to the owner's account
-    * @param token Address of the token to withdraw
-    * @param amount Amount of tokens to withdraw
-    */
-    function emergencyWithdraw(address token, uint256 amount) external onlyOwner{
+     * @dev Emergency withdraw tokens from the contract to the owner's account
+     * @param token Address of the token to withdraw
+     * @param amount Amount of tokens to withdraw
+     */
+    function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
         IERC20(token).safeTransfer(owner(), amount);
     }
-
 
     // Internal functions
 
     /**
-    * @dev Internal function to update a pool
-    * @param poolId Pool identifier
-    */
-    function _updatePool(bytes32 poolId) internal{
+     * @dev Internal function to update a pool
+     * @param poolId Pool identifier
+     */
+    function _updatePool(bytes32 poolId) internal {
         Pool storage pool = pools[poolId];
 
-        if(pool.totalStaked > 0){
+        if (pool.totalStaked > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastUpdateTime;
             uint256 rewards = timeElapsed * pool.rewardRate;
             pool.rewardPerTokenStored = rewards * 1e18 / pool.totalStaked;
@@ -290,43 +269,41 @@ contract YieldFarmingPool is ReentrancyGuard, Ownable {
 
         pool.lastUpdateTime = block.timestamp;
     }
-    
 
     /**
-    * @dev Safely transfer rewards
-    * @param to Recipient address 
-    * @param amount Amount to transfer
-    */
-    function _safeRewardTransfer(address to, uint256 amount) internal{
+     * @dev Safely transfer rewards
+     * @param to Recipient address
+     * @param amount Amount to transfer
+     */
+    function _safeRewardTransfer(address to, uint256 amount) internal {
         uint256 rewardBalance = rewardToken.balanceOf(address(this));
-        if(amount > rewardBalance){
+        if (amount > rewardBalance) {
             amount = rewardBalance;
         }
 
-        if(amount > 0){
+        if (amount > 0) {
             rewardToken.safeTransfer(to, amount);
         }
     }
 
-
     /**
-    * @dev Internal function to calculate pending rewards of an user
-    * @param poolId Pool identifier
-    * @param user User address
-    * @return pendingRewards Pending rewards amount
-    */
-    function _calculatePendingRewards(bytes32 poolId, address user) internal view returns(uint256){
+     * @dev Internal function to calculate pending rewards of an user
+     * @param poolId Pool identifier
+     * @param user User address
+     * @return pendingRewards Pending rewards amount
+     */
+    function _calculatePendingRewards(bytes32 poolId, address user) internal view returns (uint256) {
         Pool storage pool = pools[poolId];
         UserInfo storage userInfoData = userInfo[poolId][user];
 
         uint256 rewardPerTokenStored = pool.rewardPerTokenStored;
 
-        if(pool.totalStaked > 0){
+        if (pool.totalStaked > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastUpdateTime;
             uint256 rewards = timeElapsed * pool.rewardRate;
             rewardPerTokenStored += rewards * 1e18 / pool.totalStaked;
         }
-        
+
         return userInfoData.amount * rewardPerTokenStored / 1e18 - userInfoData.rewardDebt;
     }
 }
